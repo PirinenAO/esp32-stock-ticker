@@ -34,7 +34,7 @@ The program also integrates an RGB LED module to visually indicate whether the s
 | P18        | SCL     |            |
 | GND        | GND     | GND        |
 | 3.3V       | VCC     |            | 
-| P28        |         | R          | 
+| P26        |         | R          | 
 | P27        |         | G          |
 | P25        |         | B          | 
 
