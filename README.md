@@ -7,7 +7,7 @@ The program also integrates an RGB LED module to visually indicate whether the s
 ## DEPENDENCIES
 - Arduino framework (including WiFi.h and HTTPClient.h)
 - [ArduinoJson](https://github.com/bblanchon/ArduinoJson)
-- [Adafruit_GC9A01A](https://github.com/adafruit/Adafruit_GC9A01A) (requires Adafruit BusIO and GFX libraries)
+- [Adafruit_GC9A01A](https://github.com/adafruit/Adafruit_GC9A01A) (requires Adafruit GFX library)
 - [TimeLib](https://github.com/PaulStoffregen/Time)
 
 ## SETUP
