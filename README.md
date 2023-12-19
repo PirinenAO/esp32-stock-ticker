@@ -12,7 +12,7 @@ The program also integrates an RGB LED module to visually indicate whether the s
 
 ## SETUP
 **Wi-Fi credentials**
-- Open wifi_credentials.h headerfile
+- Open wifi_credentials.h headerfile.
 - Add your wifi credentials (SSID and password) to the file.
   
 **Twelvedata API key**
