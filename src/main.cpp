@@ -4,6 +4,8 @@
 #include <ArduinoJson.h>
 #include <Adafruit_GC9A01A.h>
 #include <TimeLib.h>
+
+// SET YOUR WIFI CREDENTIALS HERE
 #include "../include/wifi_credentials.h"
 
 // DISPLAY PINS
@@ -20,114 +22,75 @@
 // TIMEZONE
 #define CURRENT_TIMEZONE 7200 // Helsinki (UTC+2) (7200 seconds = 2 hours)
 
-// CREATING TFT OBJECT
+// INITIALIZING DISPLAY
 Adafruit_GC9A01A tft(TFT_CS, TFT_DC);
 
 // API SETUP
-String key = "YOUR API KEY HERE"; // SET YOUR API KEY INSIDE QUOTES
-String stock = "TSLA";            // SET THE STOCK SYMBOL INSIDE QUOTES
+String key = "YOUR API KEY"; // SET YOUR API KEY INSIDE QUOTES
+String stock = "INTC";       // SET THE STOCK SYMBOL INSIDE QUOTES
 String url = "https://api.twelvedata.com/quote?symbol=" + stock + "&apikey=" + key;
 
 // FUNCTIONS
-void colorRed();
-void colorGreen();
+void ledRed();
+void ledGreen();
 int centerX(int text_size, String text);
+void drawText(int text_size, String text, int y_position, int color);
+void connectWifi();
 
 int x_pos_text;
 
 void setup()
 {
   Serial.begin(115200);
-  WiFi.begin(ssid, passwd);
 
   // FOR RGB MODULE
   pinMode(PIN_RED, OUTPUT);
   pinMode(PIN_GREEN, OUTPUT);
-  pinMode(PIN_BLUE, OUTPUT);
-
   tft.begin();
   tft.setRotation(4);
   tft.fillScreen(GC9A01A_BLACK);
-  tft.setTextColor(GC9A01A_WHITE);
-  tft.setTextSize(SIZE_MEDIUM);
 
-  x_pos_text = centerX(SIZE_MEDIUM, "Connecting");
-  tft.setCursor(x_pos_text, 70);
-  tft.print("Connecting");
-  x_pos_text = centerX(SIZE_MEDIUM, "to WIFI");
-  tft.setCursor(x_pos_text, 100);
-  tft.print("to WIFI");
-
-  // WHILE CONNECTING
-  int loading_bar = 40;
-
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    tft.setCursor(loading_bar, 140);
-    tft.print(".");
-    loading_bar += 10;
-
-    // RESET BAR
-    if (loading_bar == 180)
-    {
-      loading_bar = 40;
-      tft.fillScreen(GC9A01A_BLACK);
-      x_pos_text = centerX(SIZE_MEDIUM, "Connecting");
-      tft.setCursor(x_pos_text, 70);
-      tft.print("Connecting");
-      x_pos_text = centerX(SIZE_MEDIUM, "to WIFI");
-      tft.setCursor(x_pos_text, 100);
-      tft.print("to WIFI");
-    }
-    delay(500);
-  }
-
-  tft.fillScreen(GC9A01A_BLACK);
-  x_pos_text = centerX(SIZE_MEDIUM, "CONNECTED");
-  tft.setCursor(x_pos_text, 100);
-  tft.print("Connected");
+  connectWifi();
 }
 
 void loop()
 {
   if ((WiFi.status() == WL_CONNECTED))
   {
+
     HTTPClient client;
     client.begin(url);
-    int httpStatus = client.GET();
+    int httpStatusCode = client.GET();
+    Serial.println(httpStatusCode);
 
-    if (httpStatus)
+    if (httpStatusCode == 200)
     {
+      // RECEIVING JSON
       String payload = client.getString();
 
-      const size_t capacity = JSON_OBJECT_SIZE(1) + 1000; // Adjust based on your JSON structure
+      // PARSE AND DESERIALIZE JSON
+      const size_t capacity = JSON_OBJECT_SIZE(1) + 1000;
       DynamicJsonDocument doc(capacity);
-      DeserializationError error = deserializeJson(doc, payload);
-
-      if (error)
-      {
-        Serial.println("Failed to parse JSON: ");
-        Serial.println(error.c_str());
-        return;
-      }
+      deserializeJson(doc, payload);
 
       // EXTRACTING CONTENT
+      String symbol = doc["symbol"];
+      String name = doc["name"];
       float change_float = doc["change"];
       float open_float = doc["open"];
-      const char *symbol = doc["symbol"];
-      const char *name = doc["name"];
       int time = doc["timestamp"];
       bool market_status = doc["is_market_open"];
 
+      // MODIFYING AND MAKING CONTENT PRINTABLE
       time += CURRENT_TIMEZONE;
-
       String open = String(open_float);
       String change = String(change_float);
       String market_open = "OPEN";
       String market_closed = "CLOSED";
-      String timestamp;
+      open += "$";
+      change += "%";
 
-      // TURNING UNIX TIMESTAMP TO READABLE DATE
+      // TURNING UNIX TIMESTAMP TO READABLE DATA
       tmElements_t timeinfo;
       char buffer[20];
       breakTime(time, timeinfo);
@@ -136,113 +99,117 @@ void loop()
               timeinfo.Year + 1970, timeinfo.Month, timeinfo.Day,
               timeinfo.Hour, timeinfo.Minute, timeinfo.Second);
 
-      timestamp = String(buffer);
-      open += "$";
-      change += "%";
+      String timestamp = String(buffer);
 
-      // PRINTING VALUES TO DISPLAY
+      // PRINTING TO DISPLAY
       tft.fillScreen(GC9A01A_BLACK);
-      tft.setTextColor(GC9A01A_WHITE);
+      drawText(SIZE_BIG, symbol, 50, GC9A01A_WHITE);
+      drawText(SIZE_BIG, open, 100, GC9A01A_WHITE);
 
-      // SYMBOL
-      tft.setTextSize(SIZE_BIG);
-      x_pos_text = centerX(SIZE_BIG, symbol);
-      tft.setCursor(x_pos_text, 50);
-      tft.print(symbol);
-      // OPEN
-      tft.setTextSize(SIZE_BIG);
-      x_pos_text = centerX(SIZE_BIG, open);
-      tft.setCursor(x_pos_text, 100);
-      tft.print(open);
-      // CHANGE
-      tft.setTextSize(SIZE_MEDIUM);
-      x_pos_text = centerX(SIZE_MEDIUM, change);
-      tft.setCursor(x_pos_text, 150);
-
-      if (change_float > 0)
+      if (change_float >= 0)
       {
-        colorGreen();
-        tft.setTextColor(GC9A01A_GREEN);
-        tft.print(change);
-      }
-      else if (change_float < 0)
-      {
-        colorRed();
-        tft.setTextColor(GC9A01A_RED);
-        tft.print(change);
-      }
-
-      // NAME
-      tft.setTextColor(GC9A01A_WHITE);
-      tft.setTextSize(SIZE_SMALL);
-      x_pos_text = centerX(SIZE_SMALL, name);
-      tft.setCursor(x_pos_text, 190);
-      tft.print(name);
-      // TIMESTAMP
-      tft.setTextColor(GC9A01A_WHITE);
-      tft.setTextSize(SIZE_SMALL);
-      x_pos_text = centerX(SIZE_SMALL, timestamp);
-      tft.setCursor(x_pos_text, 200);
-      tft.print(timestamp);
-
-      // MARKET STATUS
-      tft.setTextSize(SIZE_SMALL);
-      if (market_status)
-      {
-        tft.setTextColor(GC9A01A_GREEN);
-        x_pos_text = centerX(SIZE_SMALL, market_open);
-        tft.setCursor(x_pos_text, 210);
-        tft.print(market_open);
+        drawText(SIZE_MEDIUM, change, 150, GC9A01A_GREEN);
+        ledGreen();
       }
       else
       {
-        tft.setTextColor(GC9A01A_RED);
-        x_pos_text = centerX(SIZE_SMALL, market_closed);
-        tft.setCursor(x_pos_text, 230);
-        tft.print(market_closed);
+        drawText(SIZE_MEDIUM, change, 150, GC9A01A_RED);
+        ledRed();
       }
-      // END OF IF STATEMENT
+
+      drawText(SIZE_SMALL, name, 190, GC9A01A_WHITE);
+      drawText(SIZE_SMALL, timestamp, 200, GC9A01A_WHITE);
+
+      if (market_status)
+      {
+        drawText(SIZE_SMALL, market_open, 210, GC9A01A_GREEN);
+      }
+      else
+      {
+        drawText(SIZE_SMALL, market_closed, 210, GC9A01A_RED);
+      }
     }
     else
     {
-      // IF ERROR WITH REQUEST
+      // IF ERROR WITH HTTP REQUEST
       tft.fillScreen(GC9A01A_BLACK);
-      x_pos_text = centerX(SIZE_SMALL, "REQUEST ERROR");
-      tft.setCursor(x_pos_text, 70);
-      tft.print("REQUEST ERROR");
+      drawText(SIZE_MEDIUM, "REQUEST ERROR", 100, GC9A01A_WHITE);
+      drawText(SIZE_SMALL, "HTTP STATUS CODE:", 140, GC9A01A_WHITE);
+      drawText(SIZE_SMALL, String(httpStatusCode), 150, GC9A01A_WHITE);
     }
-    delay(300000); // 5 MINUTES DELAY
+    delay(120000); // 2 MINUTES DELAY
   }
-  else
+  else if (WiFi.status() == WL_CONNECTION_LOST)
   {
-    // IF WIFI STATUS IS NOT CONNECTED
     tft.fillScreen(GC9A01A_BLACK);
-    x_pos_text = centerX(SIZE_SMALL, "CONNECTION LOST");
-    tft.setCursor(x_pos_text, 70);
-    tft.print("CONNECTION LOST");
+    drawText(SIZE_MEDIUM, "CONNECTION", 70, GC9A01A_WHITE);
+    drawText(SIZE_MEDIUM, "LOST", 100, GC9A01A_WHITE);
     delay(5000);
+    connectWifi();
   }
 }
 
-// FUNCTION FOR CENTERING TEXTS
+// FUNCTION FOR CENTERING TEXTS ON X AXIS
 int centerX(int magnification, String text)
 {
   int default_font_width = 6;
-  int letter_width = default_font_width * magnification;
-  int string_width = text.length() * letter_width;
+  int symbol_width = default_font_width * magnification;
+  int string_width = text.length() * symbol_width;
   int x_position = (GC9A01A_TFTWIDTH - string_width) / 2;
 
   return x_position;
 }
+
+// FUNCTION FOR TEXT DRAWING
+void drawText(int text_size, String text, int y_position, int color)
+{
+  tft.setTextColor(color);
+  tft.setTextSize(text_size);
+  x_pos_text = centerX(text_size, text);
+  tft.setCursor(x_pos_text, y_position);
+  tft.print(text);
+}
+
+// FUNCTION FOR ESTABLISHING WIFI CONNECTION
+void connectWifi()
+{
+  WiFi.begin(ssid, passwd);
+  int loading_bar = 40;
+
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    drawText(SIZE_MEDIUM, "Connecting", 70, GC9A01A_WHITE);
+    drawText(SIZE_MEDIUM, "to WIFI", 100, GC9A01A_WHITE);
+
+    tft.setCursor(loading_bar, 140);
+    tft.print(".");
+    loading_bar += 10;
+
+    // RESET LOADING BAR
+    if (loading_bar == 180)
+    {
+      loading_bar = 40;
+      tft.fillScreen(GC9A01A_BLACK);
+      drawText(SIZE_MEDIUM, "Connecting", 70, GC9A01A_WHITE);
+      drawText(SIZE_MEDIUM, "to WIFI", 100, GC9A01A_WHITE);
+    }
+    delay(500);
+  }
+
+  tft.fillScreen(GC9A01A_BLACK);
+  drawText(SIZE_MEDIUM, "CONNECTED", 100, GC9A01A_WHITE);
+}
+
 // FUNCTION FOR TURNING RED LED ON
-void colorRed()
+void ledRed()
 {
   analogWrite(PIN_RED, 255);
   analogWrite(PIN_GREEN, 0);
   analogWrite(PIN_BLUE, 0);
 }
+
 // FUNCTION FOR TURNING GREEN LED ON
-void colorGreen()
+void ledGreen()
 {
   analogWrite(PIN_RED, 0);
   analogWrite(PIN_GREEN, 255);
