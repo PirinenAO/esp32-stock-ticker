@@ -20,7 +20,7 @@ The program also integrates an RGB LED module to visually indicate whether the s
 - Copy & paste your key to the key variable in main.cpp.
   
 **Select stock**
-- Add your desired stock symbol to stock variable, in main.cpp.
+- Add your desired stock symbol to stock variable in main.cpp.
 
 *Notice that free twelvedata user has limited access to the stock markets*
 
